@@ -24,7 +24,7 @@ dp = Dispatcher()
 @dp.message(CommandStart())
 async def on_start(m):
     kb = InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="Open Mini App", url=WEBAPP_URL)]]
+        inline_keyboard=[[InlineKeyboardButton(text="Open", url=WEBAPP_URL)]]
     )
     # отправляем инвайт с фото
     await m.answer_photo(photo=PHOTO_URL, caption=INVITE_TEXT, reply_markup=kb, parse_mode="HTML")
