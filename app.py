@@ -1,10 +1,11 @@
 from dotenv import load_dotenv
-import os, time, json, asyncio
-import httpx
-from fastapi import FastAPI, Request
+from html import escape
+from datetime import datetime, timezone
+import os, asyncio
 from aiogram import Bot, Dispatcher
 from aiogram.filters import CommandStart
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from prepared import create_prepared_message
 
 INVITE_TEXT = (
     "Привет! Это инвайт в GENZA — первый геймифицированный дейтинг в Telegram.\n\n"
@@ -12,69 +13,38 @@ INVITE_TEXT = (
     "Переходи по моей ссылке — получишь 1000 монет, а я — бонус 🚀"
 )
 
-# ── ENV ─────────────────────────────────────────────────────────────────────────
 load_dotenv()
 BOT_TOKEN = os.environ["BOT_TOKEN"]
-WEBAPP_URL = os.environ["WEBAPP_URL"]   # t.me/<bot>?startapp=...
-PHOTO_URL  = os.environ["PHOTO_URL"]    # https://.../image.jpg
-API_URL    = f"https://api.telegram.org/bot{BOT_TOKEN}"
+WEBAPP_URL = os.environ["WEBAPP_URL"]
+PHOTO_URL  = os.environ["PHOTO_URL"]
 
-# ── BOT / HTTP APP ──────────────────────────────────────────────────────────────
 bot = Bot(BOT_TOKEN)
 dp = Dispatcher()
-app = FastAPI()
 
-# ── PREPARED MESSAGE (RAW Bot API) ─────────────────────────────────────────────
-async def create_prepared_message(user_id: int, photo_url: str, caption: str) -> dict:
-    result = {
-        "type": "photo",
-        "id": str(int(time.time() * 1000)),
-        "photo_url": photo_url,
-        "thumb_url": photo_url,   # важно: thumb_url (не thumbnail_url)
-        "title": "GENZA",
-        "caption": caption,
-    }
-    payload = {
-        "user_id": user_id,
-        "result": result,
-        "allow_user_chats": True,
-        "allow_group_chats": True,
-        "allow_channel_chats": False,
-        "allow_bot_chats": False,
-    }
-    async with httpx.AsyncClient(timeout=15) as client:
-        r = await client.post(f"{API_URL}/savePreparedInlineMessage", json=payload)
-        print(">>> Telegram API raw response:", r.text)  # ← выведем полный ответ
-        r.raise_for_status()
-        return r.json()["result"]
-
-# ── /start → фото + кнопка + message_id в отдельном сообщении ──────────────────
 @dp.message(CommandStart())
 async def on_start(m):
     kb = InlineKeyboardMarkup(
         inline_keyboard=[[InlineKeyboardButton(text="Open Mini App", url=WEBAPP_URL)]]
     )
-    pim = await create_prepared_message(m.from_user.id, PHOTO_URL, "Готовая заготовка ✨")
-    caption = INVITE_TEXT
-    await m.answer_photo(photo=PHOTO_URL, caption=caption, reply_markup=kb, parse_mode="HTML")
-    # сразу выведем пользователю id и срок жизни
-    await m.answer(f"message_id: <code>{pim['id']}</code>\nexpires: <code>{pim['expiration_date']}</code>", parse_mode="HTML")
+    # отправляем инвайт с фото
+    await m.answer_photo(photo=PHOTO_URL, caption=INVITE_TEXT, reply_markup=kb, parse_mode="HTML")
 
-# ── HTTP API: подготовить сообщение (для WebApp) ───────────────────────────────
-@app.post("/api/create-prepared")
-async def create_prepared(req: Request):
-    payload = await req.json()
-    user_id = int(payload["user_id"])
-    caption = payload.get("text", "Готовая заготовка ✨")
-    pim = await create_prepared_message(user_id, PHOTO_URL, caption)
-    return pim  # отдадим весь ответ от Telegram
+    # готовим заготовку и шлём id в HTML
+    pim = await create_prepared_message(
+        bot_token=BOT_TOKEN,
+        user_id=m.from_user.id,
+        photo_url=PHOTO_URL,
+        caption=INVITE_TEXT,
+        webapp_url=WEBAPP_URL,
+    )
+    exp_iso = datetime.fromtimestamp(pim["expiration_date"], tz=timezone.utc).isoformat()
+    await m.answer(
+        f"message_id: <code>{escape(pim['id'])}</code>\nexpires: <code>{exp_iso}</code>",
+        parse_mode="HTML",
+    )
 
-# ── RUN ────────────────────────────────────────────────────────────────────────
 async def _main():
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    import threading, uvicorn
-    t = threading.Thread(target=lambda: uvicorn.run(app, host="0.0.0.0", port=8000), daemon=True)
-    t.start()
     asyncio.run(_main())
