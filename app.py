@@ -44,11 +44,11 @@ async def create_prepared_message(user_id: int, photo_url: str, caption: str) ->
     }
     async with httpx.AsyncClient(timeout=15) as client:
         r = await client.post(f"{API_URL}/savePreparedInlineMessage", json=payload)
-        if r.status_code != 200:
-            raise RuntimeError(f"savePreparedInlineMessage failed: {r.status_code} {r.text}")
-        return r.json()["result"]  # {"id": "...", "expiration_date": ...}
+        print(">>> Telegram API raw response:", r.text)  # ← выведем полный ответ
+        r.raise_for_status()
+        return r.json()["result"]
 
-# ── /start → фото + кнопка + message_id в подписи (HTML) ───────────────────────
+# ── /start → фото + кнопка + message_id в отдельном сообщении ──────────────────
 @dp.message(CommandStart())
 async def on_start(m):
     kb = InlineKeyboardMarkup(
@@ -57,6 +57,8 @@ async def on_start(m):
     pim = await create_prepared_message(m.from_user.id, PHOTO_URL, "Готовая заготовка ✨")
     caption = INVITE_TEXT
     await m.answer_photo(photo=PHOTO_URL, caption=caption, reply_markup=kb, parse_mode="HTML")
+    # сразу выведем пользователю id и срок жизни
+    await m.answer(f"message_id: <code>{pim['id']}</code>\nexpires: <code>{pim['expiration_date']}</code>", parse_mode="HTML")
 
 # ── HTTP API: подготовить сообщение (для WebApp) ───────────────────────────────
 @app.post("/api/create-prepared")
@@ -65,7 +67,7 @@ async def create_prepared(req: Request):
     user_id = int(payload["user_id"])
     caption = payload.get("text", "Готовая заготовка ✨")
     pim = await create_prepared_message(user_id, PHOTO_URL, caption)
-    return {"id": pim["id"], "expiresAt": pim["expiration_date"]}
+    return pim  # отдадим весь ответ от Telegram
 
 # ── RUN ────────────────────────────────────────────────────────────────────────
 async def _main():
