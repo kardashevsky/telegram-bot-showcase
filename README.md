@@ -7,4 +7,4 @@ py -3.13 -m venv venv
 venv\Scripts\activate.bat
 
 # установка зависимостей
-py -3.13 -m pip install -r requirements.txt
+.\venv\Scripts\python.exe -m pip install --upgrade pip -r requirements.txt

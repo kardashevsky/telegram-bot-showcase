@@ -1,11 +1,16 @@
 from dotenv import load_dotenv
-from html import escape
 import os, time, json, asyncio
 import httpx
 from fastapi import FastAPI, Request
 from aiogram import Bot, Dispatcher
 from aiogram.filters import CommandStart
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+INVITE_TEXT = (
+    "Привет! Это инвайт в GENZA — первый геймифицированный дейтинг в Telegram.\n\n"
+    "Здесь AI соединяет людей по вайбу и ценностям, а не только по фото.\n\n"
+    "Переходи по моей ссылке — получишь 1000 монет, а я — бонус 🚀"
+)
 
 # ── ENV ─────────────────────────────────────────────────────────────────────────
 load_dotenv()
@@ -50,7 +55,7 @@ async def on_start(m):
         inline_keyboard=[[InlineKeyboardButton(text="Open Mini App", url=WEBAPP_URL)]]
     )
     pim = await create_prepared_message(m.from_user.id, PHOTO_URL, "Готовая заготовка ✨")
-    caption = f"Запусти мини-приложение\n\nmessage_id:\n<code>{escape(pim['id'])}</code>"
+    caption = INVITE_TEXT
     await m.answer_photo(photo=PHOTO_URL, caption=caption, reply_markup=kb, parse_mode="HTML")
 
 # ── HTTP API: подготовить сообщение (для WebApp) ───────────────────────────────
